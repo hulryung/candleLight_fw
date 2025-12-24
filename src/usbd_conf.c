@@ -26,6 +26,7 @@ THE SOFTWARE.
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "hal_include.h"
 #include "usbd_core.h"
 #include "usbd_ctlreq.h"
 #include "usbd_def.h"
@@ -37,7 +38,10 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* hpcd)
 {
 	if (hpcd->Instance==USB_INTERFACE) {
 
-#if defined(USB)
+#if defined(STM32G4)
+		/* Enable USB clock */
+		__HAL_RCC_USB_CLK_ENABLE();
+#elif defined(USB)
 		__HAL_RCC_USB_CLK_ENABLE();
 #elif defined(USB_OTG_FS)
 		__HAL_RCC_USB_OTG_FS_CLK_ENABLE();
@@ -151,6 +155,9 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
 	hpcd_USB_FS.Init.vbus_sensing_enable = DISABLE;
 	hpcd_USB_FS.Init.bulk_doublebuffer_enable = ENABLE;
 	hpcd_USB_FS.Init.iso_singlebuffer_enable = DISABLE;
+#elif defined(STM32G4)
+	hpcd_USB_FS.Init.Sof_enable = ENABLE;
+	hpcd_USB_FS.Init.battery_charging_enable = DISABLE;
 #endif
 	HAL_PCD_Init(&hpcd_USB_FS);
 	/*

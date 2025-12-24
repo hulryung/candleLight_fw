@@ -259,4 +259,93 @@ const pFunc InterruptVectorTable[48] = {
 	0,                    /* CEC                          */
 	// don't need to define any interrupts after this one
 };
+#elif defined(STM32G4)
+__attribute__((used, section(".vectors")))
+const pFunc InterruptVectorTable[102] = {
+	(pFunc)(&__StackTop), // initial stack pointer
+	Reset_Handler,        // reset handler
+	NMI_Handler,          // -14: NMI
+	HardFault_Handler,    // -13: HardFault
+	0,                    // -12: MemManage_Handler
+	0,                    // -11: BusFault_Handler
+	0,                    // -10: UsageFault_Handler
+	0,                    //
+	0,                    //
+	0,                    //
+	0,                    //
+	0,                    // -5: SVC_Handler
+	0,                    // -4: DebugMon_Handler
+	0,                    //
+	0,                    // -2: PendSV
+	SysTick_Handler,      // -1: SysTick
+// External Interrupts
+	0,                    /* 0: WWDG */
+	0,                    /* 1: PVD_PVM */
+	0,                    /* 2: RTC_TAMP_LSECSS */
+	0,                    /* 3: RTC_WKUP */
+	0,                    /* 4: FLASH */
+	0,                    /* 5: RCC */
+	0,                    /* 6: EXTI0 */
+	0,                    /* 7: EXTI1 */
+	0,                    /* 8: EXTI2 */
+	0,                    /* 9: EXTI3 */
+	0,                    /* 10: EXTI4 */
+	0,                    /* 11: DMA1_Channel1 */
+	0,                    /* 12: DMA1_Channel2 */
+	0,                    /* 13: DMA1_Channel3 */
+	0,                    /* 14: DMA1_Channel4 */
+	0,                    /* 15: DMA1_Channel5 */
+	0,                    /* 16: DMA1_Channel6 */
+	0,                    /* 17: Reserved */
+	0,                    /* 18: ADC1_2 */
+	0,                    /* 19: USB_HP */
+	USB_Handler,          /* 20: USB_LP */
+	0,                    /* 21: FDCAN1_IT0 */
+	0,                    /* 22: FDCAN1_IT1 */
+	0,                    /* 23: EXTI9_5 */
+	0,                    /* 24: TIM1_BRK_TIM15 */
+	0,                    /* 25: TIM1_UP_TIM16 */
+	0,                    /* 26: TIM1_TRG_COM_TIM17 */
+	0,                    /* 27: TIM1_CC */
+	0,                    /* 28: TIM2 */
+	0,                    /* 29: TIM3 */
+	0,                    /* 30: TIM4 */
+	0,                    /* 31: I2C1_EV */
+	0,                    /* 32: I2C1_ER */
+	0,                    /* 33: I2C2_EV */
+	0,                    /* 34: I2C2_ER */
+	0,                    /* 35: SPI1 */
+	0,                    /* 36: SPI2 */
+	0,                    /* 37: USART1 */
+	0,                    /* 38: USART2 */
+	0,                    /* 39: USART3 */
+	0,                    /* 40: EXTI15_10 */
+	0,                    /* 41: RTC_Alarm */
+	0,                    /* 42: USBWakeUp */
+	0,                    /* 43: TIM8_BRK */
+	0,                    /* 44: TIM8_UP */
+	0,                    /* 45: TIM8_TRG_COM */
+	0,                    /* 46: TIM8_CC */
+	0,                    /* 47: Reserved */
+	0,                    /* 48: Reserved */
+	0,                    /* 49: LPTIM1 */
+	0,                    /* 50: Reserved */
+	0,                    /* 51: SPI3 */
+	0,                    /* 52: UART4 */
+	0,                    /* 53: Reserved */
+	0,                    /* 54: TIM6_DAC */
+	0,                    /* 55: TIM7 */
+	0,                    /* 56: DMA2_Channel1 */
+	0,                    /* 57: DMA2_Channel2 */
+	0,                    /* 58: DMA2_Channel3 */
+	0,                    /* 59: DMA2_Channel4 */
+	0,                    /* 60: DMA2_Channel5 */
+	0,                    /* 61: Reserved */
+	0,                    /* 62: Reserved */
+	0,                    /* 63: UCPD1 */
+	0,                    /* 64: COMP1_2_3 */
+	0,                    /* 65: COMP4 */
+	0,                    /* 66-84: Reserved */
+	// don't need to define any interrupts after this one
+};
 #endif

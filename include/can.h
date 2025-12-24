@@ -35,8 +35,14 @@ THE SOFTWARE.
 #include "led.h"
 #include "list.h"
 
+#if defined(CONFIG_CANFD)
+typedef FDCAN_GlobalTypeDef CAN_InstanceTypeDef;
+#else
+typedef CAN_TypeDef CAN_InstanceTypeDef;
+#endif
+
 typedef struct {
-	CAN_TypeDef *instance;
+	CAN_InstanceTypeDef *instance;
 	struct list_head list_from_host;
 	led_data_t leds;
 	struct gs_device_filter filter;
@@ -52,7 +58,7 @@ extern const struct gs_device_bt_const CAN_btconst;
 extern const struct gs_device_bt_const_extended CAN_btconst_ext;
 extern const struct gs_device_filter_info CAN_filter_info;
 
-void can_init(can_data_t *channel, CAN_TypeDef *instance);
+void can_init(can_data_t *channel, CAN_InstanceTypeDef *instance);
 void can_set_bittiming(can_data_t *channel, const struct gs_device_bittiming *timing);
 
 #ifdef CONFIG_CANFD

@@ -376,6 +376,43 @@ THE SOFTWARE.
 	#define TERM_Mode				 GPIO_MODE_OUTPUT_PP
 	#define TERM_Active_High		 1
 
+#elif defined(BOARD_HUCONN_CAN)
+	#define USBD_PRODUCT_STRING_FS	 "HUCONN CAN gs_usb"
+	#define USBD_MANUFACTURER_STRING "HUCONN"
+	#define DFU_INTERFACE_STRING_FS	 "HUCONN CAN firmware upgrade interface"
+
+	#define TIM2_CLOCK_SPEED		 170000000
+
+	#define CAN_INTERFACE			 FDCAN1
+	#define CAN_CLOCK_SPEED			 170000000
+	#define NUM_CAN_CHANNEL			 1
+	#define CONFIG_CANFD			 1
+
+	/* CAN transceiver standby control - active low (PA0) */
+	#define nCANSTBY_Port			 GPIOA
+	#define nCANSTBY_Pin			 GPIO_PIN_0
+	#define nCANSTBY_Active_High	 0
+
+	/* CAN IO power supply control (PB7) */
+	#define CAN_PWR_Port			 GPIOB
+	#define CAN_PWR_Pin				 GPIO_PIN_7
+
+	/* LED RX: Blue LED on PA15 (active low) */
+	#define LEDRX_GPIO_Port			 GPIOA
+	#define LEDRX_Pin				 GPIO_PIN_15
+	#define LEDRX_Mode				 GPIO_MODE_OUTPUT_PP
+	#define LEDRX_Active_High		 0
+
+	/* LED TX: Green LED on PB11 (active low) */
+	#define LEDTX_GPIO_Port			 GPIOB
+	#define LEDTX_Pin				 GPIO_PIN_11
+	#define LEDTX_Mode				 GPIO_MODE_OUTPUT_PP
+	#define LEDTX_Active_High		 0
+
+	#define USB_GPIO_Port			 GPIOA
+	#define USB_Pin_DM				 GPIO_PIN_11
+	#define USB_Pin_DP				 GPIO_PIN_12
+
 #else
 	#error please define BOARD
 #endif
