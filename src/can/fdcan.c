@@ -106,28 +106,11 @@ void can_init(can_data_t *channel, CAN_InstanceTypeDef *instance)
 	/* Enable FDCAN clock */
 	__HAL_RCC_FDCAN_CLK_ENABLE();
 
-	/* Initialize GPIO for CAN */
+	/* Initialize GPIO for CAN RX/TX pins */
 #if defined(BOARD_HUCONN_CAN)
-	__HAL_RCC_GPIOA_CLK_ENABLE();
 	__HAL_RCC_GPIOB_CLK_ENABLE();
 
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-	/* CAN transceiver standby control (PA0) */
-	GPIO_InitStruct.Pin = GPIO_PIN_0;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET); /* Standby off */
-
-	/* CAN IO power control (PB7) */
-	GPIO_InitStruct.Pin = GPIO_PIN_7;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_PULLUP;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET); /* Power on */
 
 	/* CAN RX/TX pins (PB8/PB9) */
 	GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9;
@@ -170,16 +153,20 @@ void can_enable(can_data_t *channel, uint32_t mode)
 	hfdcan.Init.TransmitPause = DISABLE;
 	hfdcan.Init.ProtocolException = DISABLE;
 
-	hfdcan.Init.NominalPrescaler = channel->brp;
-	hfdcan.Init.NominalSyncJumpWidth = channel->sjw;
-	hfdcan.Init.NominalTimeSeg1 = channel->phase_seg1;
-	hfdcan.Init.NominalTimeSeg2 = channel->phase_seg2;
+	/* Use fixed bit timing matching SLCAN firmware for 500kbps */
+	/* 170MHz / 20 / 17 = 500kbps */
+	hfdcan.Init.NominalPrescaler = 20;
+	hfdcan.Init.NominalSyncJumpWidth = 1;
+	hfdcan.Init.NominalTimeSeg1 = 14;
+	hfdcan.Init.NominalTimeSeg2 = 2;
 
-	/* Default data bit timing for 2Mbps with 170MHz clock */
-	hfdcan.Init.DataPrescaler = 5;
+	/* Data bit timing (for FD mode) - matching SLCAN */
+	hfdcan.Init.DataPrescaler = 5;  /* 2Mbps data rate */
 	hfdcan.Init.DataSyncJumpWidth = 1;
 	hfdcan.Init.DataTimeSeg1 = 14;
 	hfdcan.Init.DataTimeSeg2 = 2;
+
+	(void)channel; /* Ignore Linux-provided timing for now */
 
 	hfdcan.Init.StdFiltersNbr = 0;
 	hfdcan.Init.ExtFiltersNbr = 0;
@@ -197,12 +184,32 @@ void can_enable(can_data_t *channel, uint32_t mode)
 		hfdcan.Init.AutoRetransmission = DISABLE;
 	}
 
-	HAL_FDCAN_Init(&hfdcan);
-	HAL_FDCAN_Start(&hfdcan);
+	/* Initialize FDCAN */
+	if (HAL_FDCAN_Init(&hfdcan) != HAL_OK) {
+		return;
+	}
+
+	/* Configure global filter to accept all frames */
+	if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan,
+			FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_ACCEPT_IN_RX_FIFO0,
+			FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK) {
+		return;
+	}
+
+	/* Start FDCAN */
+	if (HAL_FDCAN_Start(&hfdcan) != HAL_OK) {
+		return;
+	}
 
 #ifdef nCANSTBY_Pin
 	HAL_GPIO_WritePin(nCANSTBY_Port, nCANSTBY_Pin, !GPIO_INIT_STATE(nCANSTBY_Active_High));
 #endif
+
+#ifdef CAN_PWR_Pin
+	/* Enable CAN transceiver power (active low: 0 = ON) */
+	HAL_GPIO_WritePin(CAN_PWR_Port, CAN_PWR_Pin, GPIO_PIN_RESET);
+#endif
+
 }
 
 void can_disable(can_data_t *channel)
@@ -211,6 +218,11 @@ void can_disable(can_data_t *channel)
 
 #ifdef nCANSTBY_Pin
 	HAL_GPIO_WritePin(nCANSTBY_Port, nCANSTBY_Pin, GPIO_INIT_STATE(nCANSTBY_Active_High));
+#endif
+
+#ifdef CAN_PWR_Pin
+	/* Disable CAN transceiver power (active low: 1 = OFF) */
+	HAL_GPIO_WritePin(CAN_PWR_Port, CAN_PWR_Pin, GPIO_PIN_SET);
 #endif
 
 	HAL_FDCAN_Stop(&hfdcan);

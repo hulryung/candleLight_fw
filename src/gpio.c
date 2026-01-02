@@ -122,10 +122,11 @@ void gpio_init(void)
 #endif
 
 #ifdef nCANSTBY_Pin
-	HAL_GPIO_WritePin(nCANSTBY_Port, nCANSTBY_Pin, GPIO_INIT_STATE(nCANSTBY_Active_High));
+	/* For HUCONN CAN: PA0 controls standby (active high), use pulldown to ensure low */
+	HAL_GPIO_WritePin(nCANSTBY_Port, nCANSTBY_Pin, GPIO_PIN_RESET);  // standby off
 	GPIO_InitStruct.Pin = nCANSTBY_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(nCANSTBY_Port, &GPIO_InitStruct); //xceiver standby.
 #endif
@@ -137,6 +138,16 @@ void gpio_init(void)
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(DCDCEN_Port, &GPIO_InitStruct);   //start DCDC (TODO : wait until enumerated)
+#endif
+
+#ifdef CAN_PWR_Pin
+	/* CAN_PWR active low: set to 0 (ON) at init, use pullup like SLCAN firmware */
+	HAL_GPIO_WritePin(CAN_PWR_Port, CAN_PWR_Pin, GPIO_PIN_RESET);
+	GPIO_InitStruct.Pin = CAN_PWR_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_PULLUP;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(CAN_PWR_Port, &GPIO_InitStruct);  // CAN transceiver power
 #endif
 
 #ifdef nSI86EN_Pin

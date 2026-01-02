@@ -248,7 +248,6 @@ static uint8_t USBD_GS_CAN_Start(USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 	USBD_GS_CAN_PrepareReceive(pdev);
 
 	return USBD_OK;
-
 }
 
 static uint8_t USBD_GS_CAN_DeInit(USBD_HandleTypeDef *pdev, uint8_t cfgidx)

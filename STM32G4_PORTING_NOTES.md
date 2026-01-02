@@ -1,10 +1,9 @@
-# candleLight STM32G4 (TOPST CAN) Porting Notes
+# candleLight STM32G4 (HUCONN CAN) Porting Notes
 
 ## Overview
 
 - **Goal**: Port candleLight (gs_usb) firmware to STM32G431CBT6 MCU
-- **Board Name**: TOPST CAN
-- **Reference Firmware**: `topst-can-fw-canable` (SLCAN version)
+- **Board Name**: HUCONN CAN
 - **Status**: Basic CAN working, CAN-FD requires kernel driver upgrade
 
 ---
@@ -50,7 +49,7 @@ function(add_g431_target TGTNAME)
     target_sources(${TGTNAME}_fw PRIVATE "src/device/device_g4.c")
 endfunction()
 
-set(TGTG431_LIST "TOPST_CAN")
+set(TGTG431_LIST "HUCONN_CAN")
 foreach(TGTNAME ${TGTG431_LIST})
     add_g431_target(${TGTNAME})
 endforeach()
@@ -58,13 +57,13 @@ endforeach()
 
 ### 2. include/config.h
 
-Added TOPST_CAN board configuration (line 379~):
+Added HUCONN_CAN board configuration (line 379~):
 
 ```c
-#elif defined(BOARD_TOPST_CAN)
-    #define USBD_PRODUCT_STRING_FS   "TOPST CAN gs_usb"
-    #define USBD_MANUFACTURER_STRING "TOPST"
-    #define DFU_INTERFACE_STRING_FS  "TOPST CAN firmware upgrade interface"
+#elif defined(BOARD_HUCONN_CAN)
+    #define USBD_PRODUCT_STRING_FS   "HUCONN CAN gs_usb"
+    #define USBD_MANUFACTURER_STRING "HUCONN"
+    #define DFU_INTERFACE_STRING_FS  "HUCONN CAN firmware upgrade interface"
 
     #define TIM2_CLOCK_SPEED         170000000
 
@@ -270,19 +269,19 @@ Added to `libs/STM32_HAL/config/hal_include.h`:
 cd candleLight_fw
 mkdir -p build && cd build
 cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/arm-none-eabi-gcc.cmake
-make TOPST_CAN_fw
+make HUCONN_CAN_fw
 ```
 
 Output files:
-- `build/TOPST_CAN_fw` (ELF)
-- `build/TOPST_CAN_fw.bin` (Binary)
+- `build/HUCONN_CAN_fw` (ELF)
+- `build/HUCONN_CAN_fw.bin` (Binary)
 
 ---
 
 ## Flashing
 
 ```bash
-st-flash write build/TOPST_CAN_fw.bin 0x08000000
+st-flash write build/HUCONN_CAN_fw.bin 0x08000000
 ```
 
 ---

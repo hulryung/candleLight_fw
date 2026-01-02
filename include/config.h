@@ -388,26 +388,28 @@ THE SOFTWARE.
 	#define NUM_CAN_CHANNEL			 1
 	#define CONFIG_CANFD			 1
 
-	/* CAN transceiver standby control - active low (PA0) */
+	/* CAN transceiver power control - PB7 (active low, 0=ON) */
+	#define CAN_PWR_Port			 GPIOB
+	#define CAN_PWR_Pin				 GPIO_PIN_7
+	#define CAN_PWR_Active_High		 0
+
+	/* CAN transceiver standby control - PA0
+	 * Standby pin is active high: PA0=1 -> standby ON, PA0=0 -> standby OFF
+	 * nCANSTBY_Active_High=0 means: to disable standby, output LOW */
 	#define nCANSTBY_Port			 GPIOA
 	#define nCANSTBY_Pin			 GPIO_PIN_0
 	#define nCANSTBY_Active_High	 0
 
-	/* CAN IO power supply control (PB7) */
-	#define CAN_PWR_Port			 GPIOB
-	#define CAN_PWR_Pin				 GPIO_PIN_7
+	/* LED TX/RX: PA15 (active low) - single LED for both */
+	#define LEDTX_GPIO_Port			 GPIOA
+	#define LEDTX_Pin				 GPIO_PIN_15
+	#define LEDTX_Mode				 GPIO_MODE_OUTPUT_PP
+	#define LEDTX_Active_High		 0
 
-	/* LED RX: Blue LED on PA15 (active low) */
 	#define LEDRX_GPIO_Port			 GPIOA
 	#define LEDRX_Pin				 GPIO_PIN_15
 	#define LEDRX_Mode				 GPIO_MODE_OUTPUT_PP
 	#define LEDRX_Active_High		 0
-
-	/* LED TX: Green LED on PB11 (active low) */
-	#define LEDTX_GPIO_Port			 GPIOB
-	#define LEDTX_Pin				 GPIO_PIN_11
-	#define LEDTX_Mode				 GPIO_MODE_OUTPUT_PP
-	#define LEDTX_Active_High		 0
 
 	#define USB_GPIO_Port			 GPIOA
 	#define USB_Pin_DM				 GPIO_PIN_11
