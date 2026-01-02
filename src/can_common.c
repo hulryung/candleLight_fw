@@ -29,6 +29,11 @@ THE SOFTWARE.
 #include "timer.h"
 #include "usbd_gs_can.h"
 
+/* Debug counters */
+volatile uint32_t g_send_frame_called = 0;
+volatile uint32_t g_send_frame_no_frame = 0;
+volatile uint32_t g_send_frame_has_frame = 0;
+
 #ifndef CONFIG_CANFD
 const struct gs_device_bt_const_extended CAN_btconst_ext;
 #endif
@@ -65,14 +70,18 @@ void CAN_SendFrame(USBD_GS_CAN_HandleTypeDef *hcan, can_data_t *channel)
 {
 	struct gs_host_frame_object *frame_object;
 
+	g_send_frame_called++;
+
 	bool was_irq_enabled = disable_irq();
 	frame_object = list_first_entry_or_null(&channel->list_from_host,
 											struct gs_host_frame_object,
 											list);
 	if (!frame_object) {
+		g_send_frame_no_frame++;
 		restore_irq(was_irq_enabled);
 		return;
 	}
+	g_send_frame_has_frame++;
 
 	list_del(&frame_object->list);
 	restore_irq(was_irq_enabled);

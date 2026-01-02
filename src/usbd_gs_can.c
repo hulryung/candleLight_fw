@@ -46,6 +46,18 @@ THE SOFTWARE.
 
 static volatile bool is_usb_suspend_cb = false;
 
+/* Debug counters for DataOut */
+volatile uint32_t g_dataout_called = 0;
+volatile uint32_t g_dataout_too_short = 0;
+volatile uint32_t g_dataout_no_channel = 0;
+volatile uint32_t g_dataout_fd_too_short = 0;
+volatile uint32_t g_dataout_enqueued = 0;
+volatile uint32_t g_dataout_rxlen = 0;
+volatile uint32_t g_dataout_frame_flags = 0;
+volatile uint32_t g_prepare_recv_size = 0;
+volatile uint32_t g_min_classic_size = 0;
+volatile uint8_t g_dataout_raw[20] = {0};
+
 /* Configuration Descriptor */
 static const uint8_t USBD_GS_CAN_CfgDesc[USB_CAN_CONFIG_DESC_SIZ] =
 {
@@ -234,6 +246,8 @@ static inline uint8_t USBD_GS_CAN_PrepareReceive(USBD_HandleTypeDef *pdev)
 	} else {
 		size = struct_size(frame, classic_can_ts, 1);
 	}
+
+	g_prepare_recv_size = size;
 
 	return USBD_LL_PrepareReceive(pdev, GSUSB_ENDPOINT_OUT, (uint8_t *)frame, size);
 }
@@ -617,24 +631,43 @@ static uint8_t USBD_GS_CAN_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum) {
 	USBD_GS_CAN_HandleTypeDef *hcan = (USBD_GS_CAN_HandleTypeDef*)pdev->pClassData;
 	can_data_t *channel;
 
+	g_dataout_called++;
 	uint32_t rxlen = USBD_LL_GetRxDataSize(pdev, epnum);
-	if (rxlen < (struct_size(&hcan->from_host_buf->frame, classic_can, 1))) {
+	g_dataout_rxlen = rxlen;
+	g_min_classic_size = struct_size(&hcan->from_host_buf->frame, classic_can, 1);
+
+	/* Capture first 20 bytes for debugging */
+	uint8_t *raw = (uint8_t*)&hcan->from_host_buf->frame;
+	for (int i = 0; i < 20 && i < (int)rxlen; i++) {
+		g_dataout_raw[i] = raw[i];
+	}
+
+	/* Capture frame flags even if frame is too short (for debugging) */
+	if (rxlen >= 12) {
+		g_dataout_frame_flags = hcan->from_host_buf->frame.flags;
+	}
+
+	if (rxlen < g_min_classic_size) {
 		// Invalid frame length, just ignore it and receive into the same buffer
 		// again next time.
+		g_dataout_too_short++;
 		goto out_prepare_receive;
 	}
 
 	channel = USBD_GS_CAN_GetChannel(hcan, hcan->from_host_buf->frame.channel);
 	if (!channel) {
+		g_dataout_no_channel++;
 		goto out_prepare_receive;
 	}
 
 	if (IS_ENABLED(CONFIG_CANFD) &&
 		hcan->from_host_buf->frame.flags & GS_CAN_FLAG_FD &&
 		rxlen < struct_size(&hcan->from_host_buf->frame, canfd, 1)) {
+		g_dataout_fd_too_short++;
 		goto out_prepare_receive;
 	}
 
+	g_dataout_enqueued++;
 	bool was_irq_enabled = disable_irq();
 	// Enqueue the frame we just received.
 	list_add_tail(&hcan->from_host_buf->list, &channel->list_from_host);

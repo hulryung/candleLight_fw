@@ -52,6 +52,13 @@ typedef struct {
 	uint8_t phase_seg2;
 	uint8_t sjw;
 	uint8_t nr;
+#ifdef CONFIG_CANFD
+	/* Data phase timing for CAN FD */
+	uint16_t data_brp;
+	uint8_t data_phase_seg1;
+	uint8_t data_phase_seg2;
+	uint8_t data_sjw;
+#endif
 } can_data_t;
 
 extern const struct gs_device_bt_const CAN_btconst;

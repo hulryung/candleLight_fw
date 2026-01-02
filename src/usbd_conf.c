@@ -97,8 +97,15 @@ void HAL_PCD_SetupStageCallback(PCD_HandleTypeDef *hpcd)
 	}
 }
 
+volatile uint32_t g_data_out_cb_count = 0;
+volatile uint32_t g_data_out_cb_epnum = 0;
+volatile uint32_t g_data_out_cb_xfer_count = 0;
+
 void HAL_PCD_DataOutStageCallback(PCD_HandleTypeDef *hpcd, uint8_t epnum)
 {
+	g_data_out_cb_count++;
+	g_data_out_cb_epnum = epnum;
+	g_data_out_cb_xfer_count = hpcd->OUT_ep[epnum].xfer_count;
 	USBD_LL_DataOutStage((USBD_HandleTypeDef*)hpcd->pData, epnum, hpcd->OUT_ep[epnum].xfer_buff);
 }
 
@@ -166,8 +173,8 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
 	*  0x18 -  0x57 (64 bytes) EP0 OUT
 	*  0x58 -  0x97 (64 bytes) EP0 IN
 	*  0x98 -  0xD7 (64 bytes) EP1 IN
-	*  0xD8 - 0x157 (128 bytes) EP1 OUT (buffer 1)
-	* 0x158 - 0x1D7 (128 bytes) EP1 OUT (buffer 2)
+	*  0xD8 - 0x157 (128 bytes) EP2 OUT (buffer 1)
+	* 0x158 - 0x1D7 (128 bytes) EP2 OUT (buffer 2)
 	*/
 #if defined(USB) || defined(USB_DRD_FS)
 	HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData, 0x00, PCD_SNG_BUF, 0x18);

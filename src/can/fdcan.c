@@ -39,6 +39,27 @@ THE SOFTWARE.
 
 static FDCAN_HandleTypeDef hfdcan;
 
+/* Debug variable to store last init status */
+volatile HAL_StatusTypeDef g_fdcan_init_status = HAL_OK;
+volatile HAL_StatusTypeDef g_fdcan_filter_status = HAL_OK;
+volatile HAL_StatusTypeDef g_fdcan_start_status = HAL_OK;
+volatile uint32_t g_fdcan_init_mode = 0;
+
+/* Debug variables for TX/RX */
+volatile uint32_t g_can_send_count = 0;
+volatile HAL_StatusTypeDef g_can_send_status = HAL_OK;
+volatile uint32_t g_can_send_flags = 0;
+volatile uint32_t g_can_rx_pending_count = 0;
+volatile uint32_t g_can_receive_count = 0;
+
+/* Debug for DLC tracking */
+volatile uint32_t g_tx_frame_dlc = 0;      /* can_dlc from host frame */
+volatile uint32_t g_tx_hal_dlc = 0;        /* DataLength sent to HAL */
+volatile uint32_t g_rx_hal_dlc = 0;        /* DataLength from HAL */
+volatile uint32_t g_rx_computed_dlc = 0;   /* computed can_dlc */
+volatile uint8_t g_tx_data_first8[8] = {0};
+volatile uint8_t g_rx_data_first8[8] = {0};
+
 const struct gs_device_bt_const CAN_btconst = {
 	.feature =
 		GS_CAN_FEATURE_LISTEN_ONLY |
@@ -136,37 +157,46 @@ void can_set_bittiming(can_data_t *channel, const struct gs_device_bittiming *ti
 
 void can_set_data_bittiming(can_data_t *channel, const struct gs_device_bittiming *timing)
 {
-	/* Store data bittiming - for now store in main timing fields
-	 * TODO: add separate data timing fields to can_data_t */
-	(void)channel;
-	(void)timing;
+	const uint16_t tseg1 = timing->prop_seg + timing->phase_seg1;
+
+	channel->data_brp = timing->brp;
+	channel->data_phase_seg1 = tseg1;
+	channel->data_phase_seg2 = timing->phase_seg2;
+	channel->data_sjw = timing->sjw;
 }
 
 void can_enable(can_data_t *channel, uint32_t mode)
 {
 	hfdcan.Instance = channel->instance;
 
+	/* Ensure clean state before reconfiguring */
+	HAL_FDCAN_DeInit(&hfdcan);
+
 	hfdcan.Init.ClockDivider = FDCAN_CLOCK_DIV1;
-	hfdcan.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
+	/* Use FD mode only when host requests it */
+	if (mode & GS_CAN_MODE_FD) {
+		hfdcan.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
+	} else {
+		hfdcan.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+	}
 	hfdcan.Init.Mode = FDCAN_MODE_NORMAL;
 	hfdcan.Init.AutoRetransmission = ENABLE;
 	hfdcan.Init.TransmitPause = DISABLE;
 	hfdcan.Init.ProtocolException = DISABLE;
 
-	/* Use fixed bit timing matching SLCAN firmware for 500kbps */
-	/* 170MHz / 20 / 17 = 500kbps */
+	/* Fixed nominal bit timing: 500kbps with 170MHz clock */
+	/* 170MHz / 20 / (1 + 14 + 2) = 500kbps */
 	hfdcan.Init.NominalPrescaler = 20;
 	hfdcan.Init.NominalSyncJumpWidth = 1;
 	hfdcan.Init.NominalTimeSeg1 = 14;
 	hfdcan.Init.NominalTimeSeg2 = 2;
 
-	/* Data bit timing (for FD mode) - matching SLCAN */
-	hfdcan.Init.DataPrescaler = 5;  /* 2Mbps data rate */
+	/* Fixed data bit timing: 2Mbps with 170MHz clock */
+	/* 170MHz / 5 / (1 + 14 + 2) = 2Mbps */
+	hfdcan.Init.DataPrescaler = 5;
 	hfdcan.Init.DataSyncJumpWidth = 1;
 	hfdcan.Init.DataTimeSeg1 = 14;
 	hfdcan.Init.DataTimeSeg2 = 2;
-
-	(void)channel; /* Ignore Linux-provided timing for now */
 
 	hfdcan.Init.StdFiltersNbr = 0;
 	hfdcan.Init.ExtFiltersNbr = 0;
@@ -184,20 +214,47 @@ void can_enable(can_data_t *channel, uint32_t mode)
 		hfdcan.Init.AutoRetransmission = DISABLE;
 	}
 
+	/* Store the mode for debugging */
+	g_fdcan_init_mode = mode;
+
 	/* Initialize FDCAN */
-	if (HAL_FDCAN_Init(&hfdcan) != HAL_OK) {
+	g_fdcan_init_status = HAL_FDCAN_Init(&hfdcan);
+	if (g_fdcan_init_status != HAL_OK) {
+		/* Blink LED rapidly to indicate init failure */
+		for (int i = 0; i < 10; i++) {
+			HAL_GPIO_WritePin(LEDTX_GPIO_Port, LEDTX_Pin, GPIO_PIN_RESET);
+			HAL_Delay(50);
+			HAL_GPIO_WritePin(LEDTX_GPIO_Port, LEDTX_Pin, GPIO_PIN_SET);
+			HAL_Delay(50);
+		}
 		return;
 	}
 
 	/* Configure global filter to accept all frames */
-	if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan,
+	g_fdcan_filter_status = HAL_FDCAN_ConfigGlobalFilter(&hfdcan,
 			FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_ACCEPT_IN_RX_FIFO0,
-			FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK) {
+			FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE);
+	if (g_fdcan_filter_status != HAL_OK) {
+		/* Blink LED 20 times for global filter failure */
+		for (int i = 0; i < 20; i++) {
+			HAL_GPIO_WritePin(LEDTX_GPIO_Port, LEDTX_Pin, GPIO_PIN_RESET);
+			HAL_Delay(50);
+			HAL_GPIO_WritePin(LEDTX_GPIO_Port, LEDTX_Pin, GPIO_PIN_SET);
+			HAL_Delay(50);
+		}
 		return;
 	}
 
 	/* Start FDCAN */
-	if (HAL_FDCAN_Start(&hfdcan) != HAL_OK) {
+	g_fdcan_start_status = HAL_FDCAN_Start(&hfdcan);
+	if (g_fdcan_start_status != HAL_OK) {
+		/* Blink LED 30 times for start failure */
+		for (int i = 0; i < 30; i++) {
+			HAL_GPIO_WritePin(LEDTX_GPIO_Port, LEDTX_Pin, GPIO_PIN_RESET);
+			HAL_Delay(50);
+			HAL_GPIO_WritePin(LEDTX_GPIO_Port, LEDTX_Pin, GPIO_PIN_SET);
+			HAL_Delay(50);
+		}
 		return;
 	}
 
@@ -226,6 +283,7 @@ void can_disable(can_data_t *channel)
 #endif
 
 	HAL_FDCAN_Stop(&hfdcan);
+	HAL_FDCAN_DeInit(&hfdcan);
 }
 
 bool can_is_enabled(can_data_t *channel)
@@ -237,17 +295,44 @@ bool can_is_enabled(can_data_t *channel)
 bool can_is_rx_pending(can_data_t *channel)
 {
 	(void)channel;
-	return (HAL_FDCAN_GetRxFifoFillLevel(&hfdcan, FDCAN_RX_FIFO0) > 0);
+	uint32_t fill = HAL_FDCAN_GetRxFifoFillLevel(&hfdcan, FDCAN_RX_FIFO0);
+	if (fill > 0) {
+		g_can_rx_pending_count++;
+	}
+	return (fill > 0);
 }
 
-static uint8_t dlc_to_len(uint32_t dlc)
+/* DLC code (0-15) to byte length table */
+static const uint8_t dlc_to_len_table[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
+
+/* Convert HAL DataLength format to byte length */
+static uint8_t hal_dlc_to_len(uint32_t dlc)
 {
-	static const uint8_t dlc_table[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
 	uint8_t idx = (dlc >> 16) & 0xF;
-	return dlc_table[idx];
+	return dlc_to_len_table[idx];
 }
 
-static uint32_t len_to_dlc(uint8_t len)
+/* Convert DLC code (0-15) to byte length - for gs_usb FD frames */
+static uint8_t dlc_code_to_len(uint8_t dlc_code)
+{
+	if (dlc_code > 15) dlc_code = 15;
+	return dlc_to_len_table[dlc_code];
+}
+
+/* Convert DLC code to HAL DataLength format */
+static uint32_t dlc_code_to_hal(uint8_t dlc_code)
+{
+	return ((uint32_t)dlc_code) << 16;
+}
+
+/* Convert HAL DataLength to DLC code (0-15) */
+static uint8_t hal_dlc_to_code(uint32_t dlc)
+{
+	return (dlc >> 16) & 0xF;
+}
+
+/* Convert byte length to HAL DataLength format (for classic CAN) */
+static uint32_t len_to_hal_dlc(uint8_t len)
 {
 	if (len <= 8) return len << 16;
 	else if (len <= 12) return FDCAN_DLC_BYTES_12;
@@ -267,6 +352,8 @@ bool can_receive(can_data_t *channel, struct gs_host_frame *rx_frame)
 	if (HAL_FDCAN_GetRxMessage(&hfdcan, FDCAN_RX_FIFO0, &rx_header, rx_data) != HAL_OK) {
 		return false;
 	}
+
+	g_can_receive_count++;
 
 	rx_frame->channel = channel->nr;
 	rx_frame->flags = 0;
@@ -288,13 +375,20 @@ bool can_receive(can_data_t *channel, struct gs_host_frame *rx_frame)
 		if (rx_header.BitRateSwitch == FDCAN_BRS_ON) {
 			rx_frame->flags |= GS_CAN_FLAG_BRS;
 		}
-		rx_frame->can_dlc = dlc_to_len(rx_header.DataLength);
+		g_rx_hal_dlc = rx_header.DataLength;
+		/* For FD frames, gs_usb uses DLC code (0-15), not byte length */
+		uint8_t dlc_code = hal_dlc_to_code(rx_header.DataLength);
+		uint8_t byte_len = dlc_code_to_len(dlc_code);
+		rx_frame->can_dlc = dlc_code;
+		g_rx_computed_dlc = dlc_code;
 		rx_frame->canfd_ts->timestamp_us = timer_get();
-		for (uint8_t i = 0; i < rx_frame->can_dlc && i < 64; i++) {
+		for (uint8_t i = 0; i < byte_len && i < 64; i++) {
 			rx_frame->canfd->data[i] = rx_data[i];
+			if (i < 8) g_rx_data_first8[i] = rx_data[i];
 		}
 	} else {
-		rx_frame->can_dlc = dlc_to_len(rx_header.DataLength);
+		/* For classic CAN, can_dlc is the actual byte length (0-8) */
+		rx_frame->can_dlc = hal_dlc_to_len(rx_header.DataLength);
 		if (rx_frame->can_dlc > 8) rx_frame->can_dlc = 8;
 		rx_frame->classic_can_ts->timestamp_us = timer_get();
 		for (uint8_t i = 0; i < rx_frame->can_dlc; i++) {
@@ -311,6 +405,9 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
 
 	FDCAN_TxHeaderTypeDef tx_header;
 	uint8_t tx_data[64];
+
+	g_can_send_count++;
+	g_can_send_flags = frame->flags;
 
 	if (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan) == 0) {
 		return false;
@@ -333,16 +430,22 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
 
 	/* Handle FD vs classic frames */
 	if (frame->flags & GS_CAN_FLAG_FD) {
+		/* For FD frames, frame->can_dlc is DLC code (0-15), not byte length */
 		tx_header.FDFormat = FDCAN_FD_CAN;
 		tx_header.BitRateSwitch = (frame->flags & GS_CAN_FLAG_BRS) ? FDCAN_BRS_ON : FDCAN_BRS_OFF;
-		tx_header.DataLength = len_to_dlc(frame->can_dlc);
-		for (uint8_t i = 0; i < frame->can_dlc && i < 64; i++) {
+		tx_header.DataLength = dlc_code_to_hal(frame->can_dlc);
+		uint8_t byte_len = dlc_code_to_len(frame->can_dlc);
+		g_tx_frame_dlc = frame->can_dlc;
+		g_tx_hal_dlc = tx_header.DataLength;
+		for (uint8_t i = 0; i < byte_len && i < 64; i++) {
 			tx_data[i] = frame->canfd->data[i];
+			if (i < 8) g_tx_data_first8[i] = tx_data[i];
 		}
 	} else {
+		/* For classic CAN, frame->can_dlc is actual byte length (0-8) */
 		tx_header.FDFormat = FDCAN_CLASSIC_CAN;
 		tx_header.BitRateSwitch = FDCAN_BRS_OFF;
-		tx_header.DataLength = len_to_dlc(frame->can_dlc);
+		tx_header.DataLength = len_to_hal_dlc(frame->can_dlc);
 		for (uint8_t i = 0; i < frame->can_dlc && i < 8; i++) {
 			tx_data[i] = frame->classic_can->data[i];
 		}
@@ -352,7 +455,8 @@ bool can_send(can_data_t *channel, struct gs_host_frame *frame)
 	tx_header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
 	tx_header.MessageMarker = 0;
 
-	if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan, &tx_header, tx_data) != HAL_OK) {
+	g_can_send_status = HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan, &tx_header, tx_data);
+	if (g_can_send_status != HAL_OK) {
 		return false;
 	}
 

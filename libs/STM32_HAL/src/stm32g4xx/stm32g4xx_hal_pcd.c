@@ -1815,7 +1815,11 @@ static HAL_StatusTypeDef PCD_EP_ISR_Handler(PCD_HandleTypeDef *hpcd)
         }
         else
         {
+          /* Save xfer_count before calling HAL_PCD_EP_Receive which resets it.
+           * This is needed to correctly accumulate count for multi-packet transfers. */
+          uint32_t saved_xfer_count = ep->xfer_count;
           (void)HAL_PCD_EP_Receive(hpcd, ep->num, ep->xfer_buff, ep->xfer_len);
+          ep->xfer_count = saved_xfer_count;
         }
 
       } /* if((wEPVal & EP_CTR_RX) */
